@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test)",
+      "Bash(npm run build:*)",
+      "Bash(npm run dev:*)",
+      "Bash(taskkill /F /PID 19860)",
+      "Bash(curl:*)",
+      "Bash(iconv:*)",
+      "Bash(node scripts/add-employees.mjs:*)",
+      "Bash(node -e \"\nconst { createClient } = require\\(''@supabase/supabase-js''\\);\nconst supabase = createClient\\(''https://wavvsndkwoxcckeixilt.supabase.co'', ''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhdnZzbmRrd294Y2NrZWl4aWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg4MjA0MDgsImV4cCI6MjA4NDM5NjQwOH0.iQAw_Kiw5_dElm8KHXex35gYhvLgmRqLhX_90l0rK5E''\\);\nsupabase.from\\(''employees''\\).select\\(''name, is_active''\\).eq\\(''is_active'', true\\).then\\(\\({data}\\) => console.log\\(data\\)\\);\n\")",
+      "Bash(git init:*)"
+    ]
+  }
+}
