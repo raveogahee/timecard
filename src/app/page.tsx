@@ -19,6 +19,10 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState({ text: '', type: '' })
 
+  // 残業申請
+  const [showOvertimeForm, setShowOvertimeForm] = useState(false)
+  const [overtimeMinutes, setOvertimeMinutes] = useState<number>(15)
+
   // 連続打刻防止
   const [lastPunchTime, setLastPunchTime] = useState<string | null>(null)
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
@@ -149,7 +153,7 @@ export default function Home() {
   }
 
   // 退勤打刻
-  const handleClockOut = async () => {
+  const handleClockOut = async (withOvertime: boolean = false) => {
     if (!selectedEmployee) {
       setMessage({ text: '従業員を選択してください', type: 'error' })
       return
@@ -164,17 +168,30 @@ export default function Home() {
     setMessage({ text: '', type: '' })
 
     try {
+      const body: { employee_id: string; overtime_minutes?: number } = {
+        employee_id: selectedEmployee
+      }
+
+      if (withOvertime && overtimeMinutes > 0) {
+        body.overtime_minutes = overtimeMinutes
+      }
+
       const res = await fetch('/api/attendance/clock-out', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employee_id: selectedEmployee })
+        body: JSON.stringify(body)
       })
 
       const data = await res.json()
 
       if (res.ok) {
-        setMessage({ text: '退勤しました', type: 'success' })
+        const msg = withOvertime && overtimeMinutes > 0
+          ? `退勤しました（残業${overtimeMinutes}分を申請）`
+          : '退勤しました'
+        setMessage({ text: msg, type: 'success' })
         setLastPunchTime(new Date().toISOString())
+        setShowOvertimeForm(false)
+        setOvertimeMinutes(15)
         fetchWorkingStatus()
         fetchTodayRecords()
       } else {
@@ -287,13 +304,68 @@ export default function Home() {
         {/* 打刻ボタン */}
         <div className="mb-4">
           {isWorking ? (
-            <button
-              onClick={handleClockOut}
-              disabled={loading || !selectedEmployee || !canPunch()}
-              className="w-full bg-gray-600 hover:bg-gray-700 disabled:bg-gray-300 text-white font-bold py-5 px-6 rounded-xl text-xl transition-colors shadow-sm"
-            >
-              {cooldownRemaining > 0 ? `退勤する (${cooldownRemaining}秒)` : '退勤する'}
-            </button>
+            <>
+              <button
+                onClick={() => handleClockOut(false)}
+                disabled={loading || !selectedEmployee || !canPunch()}
+                className="w-full bg-gray-600 hover:bg-gray-700 disabled:bg-gray-300 text-white font-bold py-5 px-6 rounded-xl text-xl transition-colors shadow-sm"
+              >
+                {cooldownRemaining > 0 ? `退勤する (${cooldownRemaining}秒)` : '退勤する'}
+              </button>
+
+              {/* 残業申請エリア */}
+              <div className="mt-3">
+                {!showOvertimeForm ? (
+                  <button
+                    onClick={() => setShowOvertimeForm(true)}
+                    className="w-full text-orange-600 hover:text-orange-700 text-sm py-2 transition-colors"
+                  >
+                    残業がある場合はこちら
+                  </button>
+                ) : (
+                  <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                    <div className="flex items-center gap-3">
+                      <label className="text-gray-700 text-sm font-medium whitespace-nowrap">
+                        残業時間
+                      </label>
+                      <select
+                        value={overtimeMinutes}
+                        onChange={(e) => setOvertimeMinutes(Number(e.target.value))}
+                        className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      >
+                        <option value={15}>15分</option>
+                        <option value={30}>30分</option>
+                        <option value={45}>45分</option>
+                        <option value={60}>1時間</option>
+                        <option value={75}>1時間15分</option>
+                        <option value={90}>1時間30分</option>
+                        <option value={105}>1時間45分</option>
+                        <option value={120}>2時間</option>
+                        <option value={135}>2時間15分</option>
+                        <option value={150}>2時間30分</option>
+                        <option value={165}>2時間45分</option>
+                        <option value={180}>3時間</option>
+                      </select>
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => setShowOvertimeForm(false)}
+                        className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded-lg text-sm transition-colors"
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        onClick={() => handleClockOut(true)}
+                        disabled={loading || !canPunch()}
+                        className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white font-medium py-2 px-4 rounded-lg text-sm transition-colors"
+                      >
+                        残業申請して退勤
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
             <button
               onClick={handleClockIn}

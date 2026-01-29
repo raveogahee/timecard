@@ -12,11 +12,16 @@ function getJSTClockOut() {
 
 // 退勤打刻
 export async function POST(request: NextRequest) {
-  const { employee_id } = await request.json()
+  const { employee_id, overtime_minutes } = await request.json()
 
   if (!employee_id) {
     return NextResponse.json({ error: '従業員IDが必要です' }, { status: 400 })
   }
+
+  // 残業時間がある場合は備考に追加
+  const note = overtime_minutes && overtime_minutes > 0
+    ? `残業${overtime_minutes}分`
+    : null
 
   const clockOut = getJSTClockOut()
 
@@ -45,7 +50,8 @@ export async function POST(request: NextRequest) {
       break_minutes: breakMinutes,
       work_minutes: workMinutes,
       is_overnight: isOvernight,
-      status: 'completed'
+      status: 'completed',
+      note: note
     })
     .eq('id', workingRecord.id)
     .select()

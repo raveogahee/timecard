@@ -62,6 +62,14 @@ export default function AdminPage() {
   // メッセージ
   const [message, setMessage] = useState({ text: '', type: '' })
 
+  // パスワード変更モーダル
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordMessage, setPasswordMessage] = useState({ text: '', type: '' })
+  const [passwordLoading, setPasswordLoading] = useState(false)
+
   // 認証チェック
   useEffect(() => {
     const auth = sessionStorage.getItem('admin_authenticated')
@@ -265,6 +273,64 @@ export default function AdminPage() {
     setTimeout(() => setMessage({ text: '', type: '' }), 3000)
   }
 
+  // パスワード変更処理
+  const handleChangePassword = async () => {
+    setPasswordMessage({ text: '', type: '' })
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordMessage({ text: '全ての項目を入力してください', type: 'error' })
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage({ text: '新しいパスワードが一致しません', type: 'error' })
+      return
+    }
+
+    if (newPassword.length < 4) {
+      setPasswordMessage({ text: 'パスワードは4文字以上で入力してください', type: 'error' })
+      return
+    }
+
+    setPasswordLoading(true)
+
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword })
+      })
+
+      const data = await res.json()
+
+      if (res.ok) {
+        setPasswordMessage({ text: 'パスワードを変更しました', type: 'success' })
+        setCurrentPassword('')
+        setNewPassword('')
+        setConfirmPassword('')
+        setTimeout(() => {
+          setShowPasswordModal(false)
+          setPasswordMessage({ text: '', type: '' })
+        }, 2000)
+      } else {
+        setPasswordMessage({ text: data.error || '変更に失敗しました', type: 'error' })
+      }
+    } catch {
+      setPasswordMessage({ text: 'エラーが発生しました', type: 'error' })
+    } finally {
+      setPasswordLoading(false)
+    }
+  }
+
+  // パスワードモーダルを閉じる
+  const closePasswordModal = () => {
+    setShowPasswordModal(false)
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmPassword('')
+    setPasswordMessage({ text: '', type: '' })
+  }
+
   // 時刻フォーマット（日本時間で表示）
   const formatTimeOnly = (dateStr: string) => {
     return new Date(dateStr).toLocaleTimeString('ja-JP', {
@@ -272,6 +338,18 @@ export default function AdminPage() {
       minute: '2-digit',
       timeZone: 'Asia/Tokyo'
     })
+  }
+
+  // ISO文字列 → datetime-local用の値（JST表示）
+  const toDatetimeLocalValue = (isoString: string) => {
+    const date = new Date(isoString)
+    const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000)
+    return jst.toISOString().slice(0, 16)
+  }
+
+  // datetime-localの値 → JSTオフセット付きISO文字列
+  const fromDatetimeLocalValue = (localValue: string) => {
+    return localValue + ':00+09:00'
   }
 
   // 認証画面
@@ -316,9 +394,21 @@ export default function AdminPage() {
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-xl font-bold text-gray-800">管理画面</h1>
-          <Link href="/" className="text-gray-500 hover:text-gray-700 text-sm">
-            ← 打刻画面
-          </Link>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setShowPasswordModal(true)}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+              title="パスワード変更"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+            <Link href="/" className="text-gray-500 hover:text-gray-700 text-sm">
+              ← 打刻画面
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -681,8 +771,8 @@ export default function AdminPage() {
                 <input
                   type="datetime-local"
                   className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={editingAttendance.clock_in.slice(0, 16)}
-                  onChange={(e) => setEditingAttendance({ ...editingAttendance, clock_in: e.target.value + ':00.000Z' })}
+                  value={toDatetimeLocalValue(editingAttendance.clock_in)}
+                  onChange={(e) => setEditingAttendance({ ...editingAttendance, clock_in: fromDatetimeLocalValue(e.target.value) })}
                 />
               </div>
               <div>
@@ -690,8 +780,8 @@ export default function AdminPage() {
                 <input
                   type="datetime-local"
                   className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={editingAttendance.clock_out?.slice(0, 16) || ''}
-                  onChange={(e) => setEditingAttendance({ ...editingAttendance, clock_out: e.target.value ? e.target.value + ':00.000Z' : null })}
+                  value={editingAttendance.clock_out ? toDatetimeLocalValue(editingAttendance.clock_out) : ''}
+                  onChange={(e) => setEditingAttendance({ ...editingAttendance, clock_out: e.target.value ? fromDatetimeLocalValue(e.target.value) : null })}
                 />
               </div>
               <div>
@@ -715,6 +805,79 @@ export default function AdminPage() {
                   className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg transition-colors"
                 >
                   キャンセル
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* パスワード変更モーダル */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
+            <h3 className="text-lg font-bold text-gray-800 mb-4">管理パスワード変更</h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-gray-700 text-sm font-medium mb-1">
+                  現在のパスワード
+                </label>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 text-sm font-medium mb-1">
+                  新しいパスワード
+                </label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 text-sm font-medium mb-1">
+                  新しいパスワード（確認）
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {passwordMessage.text && (
+                <div className={`p-3 rounded-lg text-sm text-center ${
+                  passwordMessage.type === 'error'
+                    ? 'bg-red-50 text-red-700 border border-red-200'
+                    : 'bg-green-50 text-green-700 border border-green-200'
+                }`}>
+                  {passwordMessage.text}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={closePasswordModal}
+                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-3 px-4 rounded-lg transition-colors"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={handleChangePassword}
+                  disabled={passwordLoading}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                >
+                  {passwordLoading ? '処理中...' : '変更する'}
                 </button>
               </div>
             </div>
