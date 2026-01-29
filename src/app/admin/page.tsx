@@ -352,6 +352,13 @@ export default function AdminPage() {
     return localValue + ':00+09:00'
   }
 
+  // noteから残業時間を抽出（「残業XX分」形式）
+  const parseOvertimeFromNote = (note: string | null): number | null => {
+    if (!note) return null
+    const match = note.match(/残業(\d+)分/)
+    return match ? parseInt(match[1], 10) : null
+  }
+
   // 認証画面
   if (!isAuthenticated) {
     return (
@@ -599,6 +606,7 @@ export default function AdminPage() {
                     <th className="text-left py-2 px-2 font-medium text-gray-600">退勤</th>
                     <th className="text-left py-2 px-2 font-medium text-gray-600">休憩</th>
                     <th className="text-left py-2 px-2 font-medium text-gray-600">労働</th>
+                    <th className="text-left py-2 px-2 font-medium text-gray-600">残業</th>
                     <th className="text-left py-2 px-2 font-medium text-gray-600">状態</th>
                     <th className="text-left py-2 px-2 font-medium text-gray-600">操作</th>
                   </tr>
@@ -613,6 +621,13 @@ export default function AdminPage() {
                       <td className="py-2 px-2">{record.clock_out ? formatTimeOnly(record.clock_out) : '-'}</td>
                       <td className="py-2 px-2">{record.break_minutes}分</td>
                       <td className="py-2 px-2">{formatMinutesJapanese(record.work_minutes)}</td>
+                      <td className="py-2 px-2">
+                        {parseOvertimeFromNote(record.note) ? (
+                          <span className="text-orange-600 font-medium">
+                            {parseOvertimeFromNote(record.note)}分
+                          </span>
+                        ) : '-'}
+                      </td>
                       <td className="py-2 px-2">
                         <span className={`px-2 py-0.5 rounded text-xs ${
                           record.status === 'working'
