@@ -14,58 +14,71 @@ function getJSTDateTime() {
 
 // 出勤打刻
 export async function POST(request: NextRequest) {
-  const { employee_id } = await request.json()
+  try {
+    const { employee_id } = await request.json()
 
-  if (!employee_id) {
-    return NextResponse.json({ error: '従業員IDが必要です' }, { status: 400 })
+    if (!employee_id) {
+      return NextResponse.json({ error: '従業員IDが必要です' }, { status: 400 })
+    }
+
+    const { workDate, clockIn } = getJSTDateTime()
+
+    // 同日の勤務記録数を取得してシフト番号を決定
+    const { data: existingRecords, error: shiftError } = await supabase
+      .from('attendance')
+      .select('shift_number')
+      .eq('employee_id', employee_id)
+      .eq('work_date', workDate)
+      .order('shift_number', { ascending: false })
+      .limit(1)
+
+    if (shiftError) {
+      return NextResponse.json({ error: 'シフト情報の取得に失敗しました' }, { status: 500 })
+    }
+
+    const shiftNumber = existingRecords && existingRecords.length > 0
+      ? existingRecords[0].shift_number + 1
+      : 1
+
+    // 出勤中のレコードがあるかチェック（複数レコード対応のためlimit(1)を使用）
+    const { data: workingRecords, error: workingError } = await supabase
+      .from('attendance')
+      .select('id')
+      .eq('employee_id', employee_id)
+      .eq('status', 'working')
+      .limit(1)
+
+    if (workingError) {
+      return NextResponse.json({ error: '勤務状態の確認に失敗しました' }, { status: 500 })
+    }
+
+    if (workingRecords && workingRecords.length > 0) {
+      return NextResponse.json({ error: '既に出勤中です' }, { status: 400 })
+    }
+
+    // 出勤記録を作成
+    const { data, error } = await supabase
+      .from('attendance')
+      .insert({
+        employee_id,
+        work_date: workDate,
+        shift_number: shiftNumber,
+        clock_in: clockIn,
+        break_minutes: 0,
+        work_minutes: 0,
+        is_overnight: false,
+        status: 'working'
+      })
+      .select()
+      .single()
+
+    if (error) {
+      return NextResponse.json({ error: '出勤記録の作成に失敗しました' }, { status: 500 })
+    }
+
+    return NextResponse.json(data)
+  } catch (err) {
+    console.error('出勤打刻エラー:', err)
+    return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 })
   }
-
-  const { workDate, clockIn } = getJSTDateTime()
-
-  // 同日の勤務記録数を取得してシフト番号を決定
-  const { data: existingRecords } = await supabase
-    .from('attendance')
-    .select('shift_number')
-    .eq('employee_id', employee_id)
-    .eq('work_date', workDate)
-    .order('shift_number', { ascending: false })
-    .limit(1)
-
-  const shiftNumber = existingRecords && existingRecords.length > 0
-    ? existingRecords[0].shift_number + 1
-    : 1
-
-  // 出勤中のレコードがあるかチェック
-  const { data: workingRecord } = await supabase
-    .from('attendance')
-    .select('*')
-    .eq('employee_id', employee_id)
-    .eq('status', 'working')
-    .maybeSingle()
-
-  if (workingRecord) {
-    return NextResponse.json({ error: '既に出勤中です' }, { status: 400 })
-  }
-
-  // 出勤記録を作成
-  const { data, error } = await supabase
-    .from('attendance')
-    .insert({
-      employee_id,
-      work_date: workDate,
-      shift_number: shiftNumber,
-      clock_in: clockIn,
-      break_minutes: 0,
-      work_minutes: 0,
-      is_overnight: false,
-      status: 'working'
-    })
-    .select()
-    .single()
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json(data)
 }

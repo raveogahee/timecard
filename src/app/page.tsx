@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Employee, Attendance } from '@/types'
 import { formatMinutesJapanese } from '@/lib/worktime'
+import { fetchWithRetry } from '@/lib/fetchWithRetry'
 
 const PUNCH_COOLDOWN_SECONDS = 5
 
@@ -52,14 +53,20 @@ export default function Home() {
 
   // 従業員一覧取得
   useEffect(() => {
-    fetch('/api/employees')
-      .then(res => res.json())
+    fetchWithRetry('/api/employees')
+      .then(res => {
+        if (!res.ok) throw new Error('従業員情報の取得に失敗しました')
+        return res.json()
+      })
       .then(data => {
         if (Array.isArray(data)) {
           setEmployees(data)
         }
       })
-      .catch(err => console.error('従業員取得エラー:', err))
+      .catch(err => {
+        console.error('従業員取得エラー:', err)
+        setMessage({ text: '従業員情報の取得に失敗しました。ページを再読み込みしてください', type: 'error' })
+      })
   }, [])
 
   // 勤務状態取得
@@ -72,7 +79,11 @@ export default function Home() {
     }
 
     try {
-      const res = await fetch(`/api/attendance/status?employee_id=${selectedEmployee}`)
+      const res = await fetchWithRetry(`/api/attendance/status?employee_id=${selectedEmployee}`)
+      if (!res.ok) {
+        console.error('勤務状態取得エラー: ステータス', res.status)
+        return
+      }
       const data = await res.json()
 
       setIsWorking(data.isWorking || false)
@@ -90,11 +101,19 @@ export default function Home() {
       return
     }
 
-    const res = await fetch(`/api/attendance/today?employee_id=${selectedEmployee}`)
-    const data = await res.json()
+    try {
+      const res = await fetchWithRetry(`/api/attendance/today?employee_id=${selectedEmployee}`)
+      if (!res.ok) {
+        console.error('本日の記録取得エラー: ステータス', res.status)
+        return
+      }
+      const data = await res.json()
 
-    if (Array.isArray(data)) {
-      setTodayRecords(data)
+      if (Array.isArray(data)) {
+        setTodayRecords(data)
+      }
+    } catch (err) {
+      console.error('本日の記録取得エラー:', err)
     }
   }, [selectedEmployee])
 
@@ -129,24 +148,35 @@ export default function Home() {
     setMessage({ text: '', type: '' })
 
     try {
-      const res = await fetch('/api/attendance/clock-in', {
+      const res = await fetchWithRetry('/api/attendance/clock-in', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ employee_id: selectedEmployee })
       })
 
-      const data = await res.json()
-
-      if (res.ok) {
-        setMessage({ text: '出勤しました', type: 'success' })
-        setLastPunchTime(new Date().toISOString())
-        fetchWorkingStatus()
-        fetchTodayRecords()
-      } else {
-        setMessage({ text: data.error || '出勤処理に失敗しました', type: 'error' })
+      if (!res.ok) {
+        let errorMessage = '出勤処理に失敗しました'
+        try {
+          const data = await res.json()
+          if (data.error) errorMessage = data.error
+        } catch {
+          // JSONパース失敗時はデフォルトメッセージを使用
+        }
+        setMessage({ text: errorMessage, type: 'error' })
+        return
       }
-    } catch {
-      setMessage({ text: 'エラーが発生しました', type: 'error' })
+
+      const data = await res.json()
+      setMessage({ text: '出勤しました', type: 'success' })
+      setLastPunchTime(new Date().toISOString())
+      fetchWorkingStatus()
+      fetchTodayRecords()
+    } catch (err) {
+      if (err instanceof TypeError && !navigator.onLine) {
+        setMessage({ text: 'ネットワークエラーです。インターネット接続を確認してください', type: 'error' })
+      } else {
+        setMessage({ text: 'サーバーに接続できません。しばらく待ってから再度お試しください', type: 'error' })
+      }
     } finally {
       setLoading(false)
     }
@@ -176,29 +206,40 @@ export default function Home() {
         body.overtime_minutes = overtimeMinutes
       }
 
-      const res = await fetch('/api/attendance/clock-out', {
+      const res = await fetchWithRetry('/api/attendance/clock-out', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       })
 
-      const data = await res.json()
-
-      if (res.ok) {
-        const msg = withOvertime && overtimeMinutes > 0
-          ? `退勤しました（残業${overtimeMinutes}分を申請）`
-          : '退勤しました'
-        setMessage({ text: msg, type: 'success' })
-        setLastPunchTime(new Date().toISOString())
-        setShowOvertimeForm(false)
-        setOvertimeMinutes(15)
-        fetchWorkingStatus()
-        fetchTodayRecords()
-      } else {
-        setMessage({ text: data.error || '退勤処理に失敗しました', type: 'error' })
+      if (!res.ok) {
+        let errorMessage = '退勤処理に失敗しました'
+        try {
+          const data = await res.json()
+          if (data.error) errorMessage = data.error
+        } catch {
+          // JSONパース失敗時はデフォルトメッセージを使用
+        }
+        setMessage({ text: errorMessage, type: 'error' })
+        return
       }
-    } catch {
-      setMessage({ text: 'エラーが発生しました', type: 'error' })
+
+      const data = await res.json()
+      const msg = withOvertime && overtimeMinutes > 0
+        ? `退勤しました（残業${overtimeMinutes}分を申請）`
+        : '退勤しました'
+      setMessage({ text: msg, type: 'success' })
+      setLastPunchTime(new Date().toISOString())
+      setShowOvertimeForm(false)
+      setOvertimeMinutes(15)
+      fetchWorkingStatus()
+      fetchTodayRecords()
+    } catch (err) {
+      if (err instanceof TypeError && !navigator.onLine) {
+        setMessage({ text: 'ネットワークエラーです。インターネット接続を確認してください', type: 'error' })
+      } else {
+        setMessage({ text: 'サーバーに接続できません。しばらく待ってから再度お試しください', type: 'error' })
+      }
     } finally {
       setLoading(false)
     }
