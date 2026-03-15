@@ -262,9 +262,9 @@ export default function AdminPage() {
     }
   }
 
-  // CSV出力
-  const handleExportCSV = async () => {
-    window.open(`/api/reports?year=${reportYear}&month=${reportMonth}&format=csv`, '_blank')
+  // Excel出力
+  const handleExportExcel = async () => {
+    window.open(`/api/reports?year=${reportYear}&month=${reportMonth}&format=xlsx`, '_blank')
   }
 
   // メッセージ表示
@@ -692,10 +692,10 @@ export default function AdminPage() {
                   ))}
                 </select>
                 <button
-                  onClick={handleExportCSV}
+                  onClick={handleExportExcel}
                   className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
                 >
-                  CSV出力
+                  Excel出力
                 </button>
               </div>
 
