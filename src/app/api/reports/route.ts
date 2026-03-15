@@ -50,8 +50,8 @@ export async function GET(request: NextRequest) {
     for (const record of attendanceData || []) {
       const employee = record.employees as { name: string } | null
       const workHours = record.work_minutes ? (record.work_minutes / 60).toFixed(2) : '0'
-      const clockIn = record.clock_in ? new Date(record.clock_in).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : ''
-      const clockOut = record.clock_out ? new Date(record.clock_out).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : ''
+      const clockIn = record.clock_in ? new Date(record.clock_in).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo' }) : ''
+      const clockOut = record.clock_out ? new Date(record.clock_out).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo' }) : ''
 
       csvRows.push([
         record.work_date,
