@@ -18,6 +18,7 @@ export default function Home() {
   const [workingRecord, setWorkingRecord] = useState<Attendance | null>(null)
   const [isOldWorkingRecord, setIsOldWorkingRecord] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [statusLoading, setStatusLoading] = useState(false)
   const [message, setMessage] = useState({ text: '', type: '' })
 
   // 残業申請
@@ -78,6 +79,7 @@ export default function Home() {
       return
     }
 
+    setStatusLoading(true)
     try {
       const res = await fetchWithRetry(`/api/attendance/status?employee_id=${selectedEmployee}`)
       if (!res.ok) {
@@ -91,6 +93,8 @@ export default function Home() {
       setIsOldWorkingRecord(data.isOldWorkingRecord || false)
     } catch (err) {
       console.error('勤務状態取得エラー:', err)
+    } finally {
+      setStatusLoading(false)
     }
   }, [selectedEmployee])
 
@@ -121,6 +125,11 @@ export default function Home() {
   useEffect(() => {
     setLastPunchTime(null)
     setCooldownRemaining(0)
+    setIsWorking(false)
+    setWorkingRecord(null)
+    setIsOldWorkingRecord(false)
+    setMessage({ text: '', type: '' })
+    setShowOvertimeForm(false)
     fetchWorkingStatus()
     fetchTodayRecords()
   }, [selectedEmployee, fetchWorkingStatus, fetchTodayRecords])
@@ -286,9 +295,10 @@ export default function Home() {
             従業員
           </label>
           <select
-            className="w-full p-3 border border-gray-300 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full p-3 border border-gray-300 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
             value={selectedEmployee}
             onChange={(e) => setSelectedEmployee(e.target.value)}
+            disabled={loading || statusLoading}
           >
             <option value="">選択してください</option>
             {employees.map(emp => (
@@ -322,14 +332,21 @@ export default function Home() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-4">
             <div className="flex items-center justify-between mb-4">
               <span className="text-gray-600">ステータス</span>
-              <span className={`flex items-center gap-2 font-medium ${
-                isWorking ? 'text-blue-600' : 'text-gray-500'
-              }`}>
-                <span className={`w-3 h-3 rounded-full ${
-                  isWorking ? 'bg-blue-500 animate-pulse' : 'bg-gray-300'
-                }`}></span>
-                {isWorking ? '勤務中' : '未出勤'}
-              </span>
+              {statusLoading ? (
+                <span className="flex items-center gap-2 text-gray-400">
+                  <div className="w-3 h-3 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
+                  確認中...
+                </span>
+              ) : (
+                <span className={`flex items-center gap-2 font-medium ${
+                  isWorking ? 'text-blue-600' : 'text-gray-500'
+                }`}>
+                  <span className={`w-3 h-3 rounded-full ${
+                    isWorking ? 'bg-blue-500 animate-pulse' : 'bg-gray-300'
+                  }`}></span>
+                  {isWorking ? '勤務中' : '未出勤'}
+                </span>
+              )}
             </div>
             {workingRecord && (
               <div className="text-gray-600">
@@ -344,11 +361,18 @@ export default function Home() {
 
         {/* 打刻ボタン */}
         <div className="mb-4">
-          {isWorking ? (
+          {statusLoading ? (
+            <div className="w-full bg-gray-100 border border-gray-200 rounded-xl py-5 px-6 text-center">
+              <div className="flex items-center justify-center gap-3">
+                <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-gray-500 text-lg">勤務状態を確認中...</span>
+              </div>
+            </div>
+          ) : isWorking ? (
             <>
               <button
                 onClick={() => handleClockOut(false)}
-                disabled={loading || !selectedEmployee || !canPunch()}
+                disabled={loading || statusLoading || !selectedEmployee || !canPunch()}
                 className="w-full bg-gray-600 hover:bg-gray-700 disabled:bg-gray-300 text-white font-bold py-5 px-6 rounded-xl text-xl transition-colors shadow-sm"
               >
                 {cooldownRemaining > 0 ? `退勤する (${cooldownRemaining}秒)` : '退勤する'}
@@ -397,7 +421,7 @@ export default function Home() {
                       </button>
                       <button
                         onClick={() => handleClockOut(true)}
-                        disabled={loading || !canPunch()}
+                        disabled={loading || statusLoading || !canPunch()}
                         className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white font-medium py-2 px-4 rounded-lg text-sm transition-colors"
                       >
                         残業申請して退勤
@@ -410,7 +434,7 @@ export default function Home() {
           ) : (
             <button
               onClick={handleClockIn}
-              disabled={loading || !selectedEmployee || !canPunch()}
+              disabled={loading || statusLoading || !selectedEmployee || !canPunch()}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-bold py-5 px-6 rounded-xl text-xl transition-colors shadow-sm"
             >
               {cooldownRemaining > 0 ? `出勤する (${cooldownRemaining}秒)` : '出勤する'}
